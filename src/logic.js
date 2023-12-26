@@ -32,12 +32,11 @@ export async function stopLoss(request, env, ctx, usingDemoAccount) {
     let accountBalance;
     let account;
     if (usingDemoAccount) {
-        accountBalance = accountData.accounts[0].balance.balance;
+        accountBalance = accountData.accounts[1].balance.balance;
     } else {
         account = accountData.accounts.find(acc => acc.accountName === "Spread bet 2");
         accountBalance = account.balance.balance;
     }
-    
 
     // Fetch all open positions
     const openPositionsResponse = await fetch(`${baseURL}/positions`, {

@@ -86,19 +86,23 @@ export async function stopLoss(request, env, ctx, usingDemoAccount) {
 
     });
 
-    // Add a plRatio property to each instrumentName
+    // Add a plRatio property to each instrumentName and the market status
 
     for (const instrumentName in summedPositions) {
         const plRatio = summedPositions[instrumentName].pl / accountBalance;
         summedPositions[instrumentName].plRatio = plRatio;
+        const marketStatus = summedPositions[instrumentName].positions[0].market.marketStatus;
+        summedPositions[instrumentName].marketStatus = marketStatus;
     }
 
     // Push positions to close to an array
 
     const positionsToClose = [];
 
+    const instrumentsNotToClose = ["Apple Inc (All Sessions)", "EU Stocks 50", "Alphabet Inc - A (All Sessions)", "USD/JPY", "GBP/USD", "Marathon Digital Holdings Inc"];
+
     for (const instrumentName in summedPositions) {
-        if (summedPositions[instrumentName].plRatio < -0.02) {
+        if (summedPositions[instrumentName].plRatio < -0.01 && summedPositions[instrumentName].marketStatus === "TRADEABLE" && !instrumentsNotToClose.includes(instrumentName)) {
             for (const position of summedPositions[instrumentName].positions) {
                 const positionDetailsForClosure = {
                     dealId: position.position.dealId,
@@ -143,7 +147,7 @@ export async function stopLoss(request, env, ctx, usingDemoAccount) {
         }
     }
 
-    return summedPositions;
+    //return positionsToClose;
 
 
 }

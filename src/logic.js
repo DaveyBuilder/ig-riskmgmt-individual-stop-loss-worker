@@ -102,7 +102,7 @@ export async function stopLoss(request, env, ctx, usingDemoAccount) {
     const instrumentsNotToClose = ["EU Stocks 50"];
 
     for (const instrumentName in summedPositions) {
-        if (summedPositions[instrumentName].plRatio < -0.02 && summedPositions[instrumentName].marketStatus === "TRADEABLE" && !instrumentsNotToClose.includes(instrumentName)) {
+        if (summedPositions[instrumentName].plRatio < -0.01 && summedPositions[instrumentName].marketStatus === "TRADEABLE" && !instrumentsNotToClose.includes(instrumentName)) {
             for (const position of summedPositions[instrumentName].positions) {
                 const positionDetailsForClosure = {
                     dealId: position.position.dealId,

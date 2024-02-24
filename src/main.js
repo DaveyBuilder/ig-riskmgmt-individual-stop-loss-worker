@@ -1,6 +1,10 @@
-import { loginIG } from './login_ig.js';
+import { loginIG } from './helper_functions/login_ig.js';
+import { getOpenPositions } from './helper_functions/open_positions.js';
+import {isMarketOpen} from './helper_functions/is_market_open.js';
+import { closePosition } from './helper_functions/close_position.js';
+import { getAccountBalance } from './helper_functions/account_balance.js';
 
-export async function stopLoss(request, env, ctx, usingDemoAccount) {
+export async function executeScheduledTask(request, env, ctx, usingDemoAccount) {
 
     let baseURL;
     if (usingDemoAccount) {
@@ -9,52 +13,17 @@ export async function stopLoss(request, env, ctx, usingDemoAccount) {
         baseURL = 'https://api.ig.com/gateway/deal';
     }
 
-    const { CST, X_SECURITY_TOKEN } = await loginIG(env, usingDemoAccount);
+    const { CST, X_SECURITY_TOKEN } = await loginIG(env, baseURL);
 
-    // Fetch the account balance
-    const accountResponse = await fetch(`${baseURL}/accounts`, {
-        method: 'GET',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-IG-API-KEY': env.IG_API_KEY,
-            'Version': '1',
-            'CST': CST,
-            'X-SECURITY-TOKEN': X_SECURITY_TOKEN
-        }
-    });
+    // Check if nasdaq 100 futures are open & exit if not
+	const marketStatus = await isMarketOpen(env, CST, X_SECURITY_TOKEN, baseURL);
+	if (marketStatus === "EDITS_ONLY") {
+		return;
+	}
 
-    if (!accountResponse.ok) {
-        throw new Error(`Error getting account. HTTP status: ${accountResponse.status}`);
-    }
+    const accountBalance = await getAccountBalance(env, CST, X_SECURITY_TOKEN, baseURL);
 
-    const accountData = await accountResponse.json();
-
-    let accountBalance;
-    let account;
-    if (usingDemoAccount) {
-        accountBalance = accountData.accounts[1].balance.balance;
-    } else {
-        account = accountData.accounts.find(acc => acc.accountName === "Spread bet 2");
-        accountBalance = account.balance.balance;
-    }
-
-    // Fetch all open positions
-    const openPositionsResponse = await fetch(`${baseURL}/positions`, {
-        method: 'GET',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-IG-API-KEY': env.IG_API_KEY,
-            'Version': '2',
-            'CST': CST,
-            'X-SECURITY-TOKEN': X_SECURITY_TOKEN
-        }
-    });
-
-    if (!openPositionsResponse.ok) {
-        throw new Error(`Error getting open positions. HTTP status: ${openPositionsResponse.status}`);
-    }
-
-    const openPositionsData = await openPositionsResponse.json();
+    const openPositionsData = await getOpenPositions(env, CST, X_SECURITY_TOKEN, baseURL);
 
     // Initialize an empty object to store the summed profit and loss for each market
     let summedPositions = {};
@@ -119,33 +88,19 @@ export async function stopLoss(request, env, ctx, usingDemoAccount) {
     }
 
     // Now close each position in positionsToClose
-    
-    // Define the headers
-    const closePositionHeaders = {
-        'Content-Type': 'application/json',
-        'X-IG-API-KEY': env.IG_API_KEY,
-        'Version': '1',
-        'CST': CST,
-        'X-SECURITY-TOKEN': X_SECURITY_TOKEN,
-        '_method': 'DELETE'
-    };
 
     // Iterate over positionsToClose and make a request for each
+    let closedPositionsErrors = [];
     for (const position of positionsToClose) {
-        const response = await fetch(`${baseURL}/positions/otc`, {
-            method: 'POST',
-            headers: closePositionHeaders,
-            body: JSON.stringify(position) // Convert the JavaScript object to a string
-        });
-
-        if (!response.ok) {
-            console.error(`Failed to close position. Status code: ${response.status}`);
-        } else {
-            console.log(`Position closed successfully.`);
+        try {
+            await closePosition(env, CST, X_SECURITY_TOKEN, baseURL, position);
+        } catch (error) {
+            closedPositionsErrors.push(error);
         }
     }
 
-    //return positionsToClose;
-
+    if (closedPositionsErrors.length > 0) {
+        throw new Error(`Failed to close positions: ${closedPositionsErrors.map(error => error.message).join(", ")}`);
+    }
 
 }
